@@ -107,12 +107,12 @@ export default function Home() {
     }
   }
 
-  // const formatTime = (date: Date) => {
-  //   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  // }
   const formatTime = (date: Date) => {
-  return date.toISOString().slice(11, 16) // "HH:MM" in UTC
-}
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
+  // const formatTime = (date: Date) => {
+  // return date.toISOString().slice(11, 16) // "HH:MM" in UTC
+// }
 
 
   return (
@@ -127,7 +127,7 @@ export default function Home() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="font-semibold text-foreground">AI Assistant</h1>
+              <h1 className="font-semibold text-foreground">ClassSync AI Assistant</h1>
               <p className="text-sm text-muted-foreground">{isLoading ? "Thinking..." : "Always here to help"}</p>
             </div>
           </div>
