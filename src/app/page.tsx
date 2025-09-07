@@ -167,7 +167,7 @@ export default function Home() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h1 className="font-semibold text-foreground">AI Assistant</h1>
+                <h1 className="font-semibold text-foreground">ClassSync AI Assistant</h1>
                 <p className="text-sm text-muted-foreground">{isLoading ? "Thinking..." : "Always here to help"}</p>
               </div>
             </div>
