@@ -134,11 +134,14 @@ export default function Home() {
                 finalContent = data.content
                 setStreamingMessage(data.content)
               }
-            } catch (e) {}
+            } catch (e) {
+              throw new Error("Error parsing stream data")
+            }
           }
         }
       }
     } catch (error) {
+      console.error("Error:", error)
       const errorMessage: Message = {
         role: "assistant",
         content: "I'm experiencing some technical difficulties. Please try again.",
