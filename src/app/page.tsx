@@ -1,36 +1,40 @@
-"use client"
-import { useState, useRef, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Card } from "@/components/ui/card"
-import { Send, Bot, User, Trash2 } from "lucide-react"
+"use client";
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
+import { Send, Bot, User, Trash2, RotateCcw } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
-  role: "user" | "assistant"
-  content: string
-  timestamp: Date
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  hasError?: boolean;
 }
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("chatHistory")
+      const saved = localStorage.getItem("chatHistory");
       if (saved) {
         try {
-          const parsed = JSON.parse(saved)
+          const parsed = JSON.parse(saved);
           return parsed.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp),
-          }))
+          }));
         } catch {
           return [
             {
               role: "assistant",
-              content: "Hello! I'm your AI assistant. How can I help you today?",
+              content:
+                "Hello! I'm your AI assistant. How can I help you today?",
               timestamp: new Date(),
             },
-          ]
+          ];
         }
       }
     }
@@ -40,123 +44,150 @@ export default function Home() {
         content: "Hello! I'm your AI assistant. How can I help you today?",
         timestamp: new Date(),
       },
-    ]
-  })
+    ];
+  });
 
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [streamingMessage, setStreamingMessage] = useState("")
-  const [showClearFeedback, setShowClearFeedback] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [showClearFeedback, setShowClearFeedback] = useState(false);
+  const [lastUserMessage, setLastUserMessage] = useState("");
+  const [showRetryButton, setShowRetryButton] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, streamingMessage])
+    scrollToBottom();
+  }, [messages, streamingMessage]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem("chatHistory", JSON.stringify(messages))
+      localStorage.setItem("chatHistory", JSON.stringify(messages));
     }
-  }, [messages])
+  }, [messages]);
 
   const clearHistory = () => {
     const initialMessage: Message = {
       role: "assistant",
       content: "Hello! I'm your AI assistant. How can I help you today?",
       timestamp: new Date(),
-    }
-    setMessages([initialMessage])
+    };
+    setMessages([initialMessage]);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("chatHistory")
+      localStorage.removeItem("chatHistory");
     }
-    setShowClearFeedback(true)
-    setTimeout(() => setShowClearFeedback(false), 2000)
-  }
+    setShowClearFeedback(true);
+    setTimeout(() => setShowClearFeedback(false), 2000);
+  };
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return
+  const sendMessage = async (messageToSend?: string) => {
+    const messageContent = messageToSend || input;
+    if (!messageContent.trim() || isLoading) return;
 
     const userMessage: Message = {
       role: "user",
-      content: input,
+      content: messageContent,
       timestamp: new Date(),
-    }
+    };
 
-    const newMessages = [...messages, userMessage]
-    setMessages(newMessages)
-    setInput("")
-    setIsLoading(true)
-    setStreamingMessage("")
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    if (!messageToSend) setInput("");
+    setLastUserMessage(messageContent);
+    setIsLoading(true);
+    setStreamingMessage("");
+    setShowRetryButton(false);
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: input,
-          history: messages.map((msg) => ({ role: msg.role, content: msg.content })),
+          message: messageContent,
+          history: messages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
         }),
-      })
+      });
 
-      if (!res.body) throw new Error("No response body")
+      if (!res.body) throw new Error("No response body");
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let finalContent = ""
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let finalContent = "";
 
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split("\n")
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6))
+              const data = JSON.parse(line.slice(6));
               if (data.error) {
-                throw new Error(data.error)
+                console.error("[Chat Error]", data.error);
+                const errorMessage: Message = {
+                  role: "assistant",
+                  content: data.error,
+                  timestamp: new Date(),
+                  hasError: true,
+                };
+                setMessages([...newMessages, errorMessage]);
+                setStreamingMessage("");
+                setShowRetryButton(true);
+                return;
               }
               if (data.done) {
                 const assistantMessage: Message = {
                   role: "assistant",
                   content: finalContent,
                   timestamp: new Date(),
-                }
-                setMessages([...newMessages, assistantMessage])
-                setStreamingMessage("")
+                };
+                setMessages([...newMessages, assistantMessage]);
+                setStreamingMessage("");
               } else if (data.content) {
-                finalContent = data.content
-                setStreamingMessage(data.content)
+                finalContent = data.content;
+                setStreamingMessage(data.content);
               }
             } catch (e) {
-              throw new Error("Error parsing stream data")
+              console.error("[Parse Error]", e);
             }
           }
         }
       }
     } catch (error) {
-      console.error("Error:", error)
+      console.error("[Network Error]", error);
       const errorMessage: Message = {
         role: "assistant",
-        content: "I'm experiencing some technical difficulties. Please try again.",
+        content:
+          "⚠️ The service is temporarily unavailable. Please try again later.",
         timestamp: new Date(),
-      }
-      setMessages([...newMessages, errorMessage])
-      setStreamingMessage("")
+        hasError: true,
+      };
+      setMessages([...newMessages, errorMessage]);
+      setStreamingMessage("");
+      setShowRetryButton(true);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
+
+  const retryLastMessage = () => {
+    if (lastUserMessage) {
+      sendMessage(lastUserMessage);
+    }
+  };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -171,7 +202,20 @@ export default function Home() {
               </Avatar>
               <div>
                 <h1 className="font-semibold text-foreground">ClassSync AI Assistant</h1>
-                <p className="text-sm text-muted-foreground">{isLoading ? "Thinking..." : "Always here to help"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {isLoading ? "Thinking..." : "Always here to help"}
+                </p>
+                {/* Developer instagram link */}
+                <div className="text-xs text-muted-foreground">
+                  Developed by{" "}
+                  <a
+                    href="https://www.instagram.com/deepu.exe/"
+                    target="_blank"
+                    className="underline hover:text-foreground"
+                  >
+                    deepu.exe
+                  </a>
+                </div>
               </div>
             </div>
             <Button
@@ -207,24 +251,58 @@ export default function Home() {
                     className={
                       message.role === "user"
                         ? "bg-secondary text-secondary-foreground"
+                        : message.hasError
+                        ? "bg-destructive text-destructive-foreground"
                         : "bg-primary text-primary-foreground"
                     }
                   >
-                    {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                    {message.role === "user" ? (
+                      <User className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4" />
+                    )}
                   </AvatarFallback>
                 </Avatar>
 
-                <div className={`flex flex-col max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"}`}>
+                <div
+                  className={`flex flex-col max-w-[80%] ${
+                    message.role === "user" ? "items-end" : "items-start"
+                  }`}
+                >
                   <Card
                     className={`px-4 py-3 shadow-sm border-0 transition-all duration-200 hover:shadow-md ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : message.hasError
+                        ? "bg-destructive/10 text-destructive border border-destructive/20"
                         : "bg-card text-card-foreground hover:bg-card/80"
                     }`}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-pretty">{message.content}</p>
+                    {/* <p className="text-sm leading-relaxed whitespace-pre-wrap text-pretty">{message.content}</p> */}
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ node, ...props }) => (
+                          <p
+                            className="text-sm leading-relaxed whitespace-pre-wrap"
+                            {...props}
+                          />
+                        ),
+                        a: ({ node, ...props }) => (
+                          <a
+                            className="text-blue-600 underline"
+                            target="_blank"
+                            {...props}
+                          />
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
                   </Card>
-                  <span className="text-xs text-muted-foreground mt-1 px-1">{formatTime(message.timestamp)}</span>
+                  <span className="text-xs text-muted-foreground mt-1 px-1">
+                    {formatTime(message.timestamp)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -261,9 +339,25 @@ export default function Home() {
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
                     </div>
-                    <span className="text-sm text-muted-foreground ml-2">Thinking...</span>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      Thinking...
+                    </span>
                   </div>
                 </Card>
+              </div>
+            )}
+
+            {showRetryButton && !isLoading && (
+              <div className="flex justify-center animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                <Button
+                  onClick={retryLastMessage}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 hover:bg-primary hover:text-primary-foreground transition-colors bg-transparent"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Retry
+                </Button>
               </div>
             )}
 
@@ -279,8 +373,8 @@ export default function Home() {
                   placeholder="Type your message..."
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
+                      e.preventDefault();
+                      sendMessage();
                     }
                   }}
                   disabled={isLoading}
@@ -288,7 +382,7 @@ export default function Home() {
                 />
               </div>
               <Button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || isLoading}
                 size="icon"
                 className="h-[44px] w-[44px] shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 hover:scale-105 active:scale-95"
@@ -307,5 +401,5 @@ export default function Home() {
         </div>
       </div>
     </div>
-  )
+  );
 }

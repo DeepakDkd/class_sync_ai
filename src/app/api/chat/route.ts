@@ -2,15 +2,54 @@ import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
   try {
-    const { message } = await req.json()
+    const { message, history = [] } = await req.json()
 
     const encoder = new TextEncoder()
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_OPENAI_API}/${encodeURIComponent(message)}`)
+          let contextPrompt = message
+          if (history.length > 0) {
+            const contextMessages = history
+              .slice(-10) // Keep last 10 messages for context
+              .map((msg: any) => `${msg.role === "user" ? "Human" : "Assistant"}: ${msg.content}`)
+              .join("\n")
+            contextPrompt = `Previous conversation:\n${contextMessages}\n\nHuman: ${message}\nAssistant:`
+          }
+
+          const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(contextPrompt)}`)
+
+          if (!res.ok) {
+            let errorMessage = "Something went wrong"
+
+            if (res.status === 502) {
+              errorMessage = "⚠️ The service is temporarily unavailable. Please try again later."
+            } else if (res.status === 400) {
+              errorMessage = "⚠️ There was an issue with your request. Please rephrase and try again."
+            }
+
+            // Log the raw error for debugging
+            console.error("[API Error]", {
+              status: res.status,
+              statusText: res.statusText,
+              url: res.url,
+            })
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`))
+            controller.close()
+            return
+          }
+
           const reply = await res.text()
+
+          if (reply.toLowerCase().includes("azure-openai") || reply.toLowerCase().includes("content_filter")) {
+            const errorMessage = "⚠️ Your request triggered content filtering policies. Please rephrase your message."
+            console.error("[Content Filter Error]", reply)
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`))
+            controller.close()
+            return
+          }
 
           // Stream the response character by character
           for (let i = 0; i < reply.length; i++) {
@@ -24,7 +63,12 @@ export async function POST(req: Request) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`))
           controller.close()
         } catch (error) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Something went wrong" })}\n\n`))
+          console.error("[Stream Error]", error)
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ error: "⚠️ The service is temporarily unavailable. Please try again later." })}\n\n`,
+            ),
+          )
           controller.close()
         }
       },
@@ -38,6 +82,10 @@ export async function POST(req: Request) {
       },
     })
   } catch (err) {
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+    console.error("[Request Error]", err)
+    return NextResponse.json(
+      { error: "⚠️ There was an issue with your request. Please rephrase and try again." },
+      { status: 500 },
+    )
   }
 }
