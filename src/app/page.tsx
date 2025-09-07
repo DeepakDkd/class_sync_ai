@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
-import { Send, Bot, User } from "lucide-react"
+import { Send, Bot, User, Trash2 } from "lucide-react"
 
 interface Message {
   role: "user" | "assistant"
@@ -13,16 +13,40 @@ interface Message {
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content: "Hello! I'm your AI assistant. How can I help you today?",
-      timestamp: new Date(),
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("chatHistory")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          return parsed.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }))
+        } catch {
+          return [
+            {
+              role: "assistant",
+              content: "Hello! I'm your AI assistant. How can I help you today?",
+              timestamp: new Date(),
+            },
+          ]
+        }
+      }
+    }
+    return [
+      {
+        role: "assistant",
+        content: "Hello! I'm your AI assistant. How can I help you today?",
+        timestamp: new Date(),
+      },
+    ]
+  })
+
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState("")
+  const [showClearFeedback, setShowClearFeedback] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -32,6 +56,26 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, streamingMessage])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("chatHistory", JSON.stringify(messages))
+    }
+  }, [messages])
+
+  const clearHistory = () => {
+    const initialMessage: Message = {
+      role: "assistant",
+      content: "Hello! I'm your AI assistant. How can I help you today?",
+      timestamp: new Date(),
+    }
+    setMessages([initialMessage])
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("chatHistory")
+    }
+    setShowClearFeedback(true)
+    setTimeout(() => setShowClearFeedback(false), 2000)
+  }
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return
@@ -52,7 +96,10 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({
+          message: input,
+          history: messages.map((msg) => ({ role: msg.role, content: msg.content })),
+        }),
       })
 
       if (!res.body) throw new Error("No response body")
@@ -76,7 +123,6 @@ export default function Home() {
                 throw new Error(data.error)
               }
               if (data.done) {
-                // Streaming complete, add final message
                 const assistantMessage: Message = {
                   role: "assistant",
                   content: finalContent,
@@ -88,9 +134,7 @@ export default function Home() {
                 finalContent = data.content
                 setStreamingMessage(data.content)
               }
-            } catch (e) {
-              // Skip invalid JSON lines
-            }
+            } catch (e) {}
           }
         }
       }
@@ -110,31 +154,41 @@ export default function Home() {
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
-  // const formatTime = (date: Date) => {
-  // return date.toISOString().slice(11, 16) // "HH:MM" in UTC
-// }
-
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10 bg-primary">
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                <Bot className="h-5 w-5" />
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="font-semibold text-foreground">ClassSync AI Assistant</h1>
-              <p className="text-sm text-muted-foreground">{isLoading ? "Thinking..." : "Always here to help"}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10 bg-primary">
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  <Bot className="h-5 w-5" />
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h1 className="font-semibold text-foreground">AI Assistant</h1>
+                <p className="text-sm text-muted-foreground">{isLoading ? "Thinking..." : "Always here to help"}</p>
+              </div>
             </div>
+            <Button
+              onClick={clearHistory}
+              variant="outline"
+              size="sm"
+              className="gap-2 hover:bg-destructive hover:text-destructive-foreground transition-colors bg-transparent"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear History
+            </Button>
           </div>
+          {showClearFeedback && (
+            <div className="mt-2 text-sm text-green-600 animate-in fade-in-0 slide-in-from-top-1 duration-300">
+              Chat history cleared!
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Messages Container */}
       <div className="flex-1 overflow-hidden">
         <div className="max-w-4xl mx-auto h-full flex flex-col">
           <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
@@ -190,7 +244,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Loading indicator */}
             {isLoading && !streamingMessage && (
               <div className="flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
                 <Avatar className="h-8 w-8 shrink-0">
@@ -214,7 +267,6 @@ export default function Home() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
           <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
             <div className="flex gap-3 items-end">
               <div className="flex-1">
