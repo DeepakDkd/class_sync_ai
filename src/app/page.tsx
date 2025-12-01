@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Send, Bot, User, Trash2, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ModeToggle } from "@/components/theme-toggle";
+import MarkdownMessage from "@/components/markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -54,6 +56,7 @@ export default function Home() {
   const [lastUserMessage, setLastUserMessage] = useState("");
   const [showRetryButton, setShowRetryButton] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -209,7 +212,7 @@ export default function Home() {
                 <div className="text-xs text-muted-foreground">
                   Developed by{" "}
                   <a
-                    href="https://www.instagram.com/deepu.exe/"
+                    href="https://www.linkedin.com/in/deepak-dhakad-web-developer/"
                     target="_blank"
                     className="underline hover:text-foreground"
                   >
@@ -217,6 +220,7 @@ export default function Home() {
                   </a>
                 </div>
               </div>
+              <ModeToggle />
             </div>
             <Button
               onClick={clearHistory}
@@ -237,14 +241,13 @@ export default function Home() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="max-w-4xl mx-auto h-full flex flex-col">
+        <div className="max-w-4xl mx-auto h-full flex flex-col pb-20">
           <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 ${
-                  message.role === "user" ? "flex-row-reverse" : "flex-row"
-                }`}
+                className={`flex gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 ${message.role === "user" ? "flex-row-reverse" : "flex-row"
+                  }`}
               >
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback
@@ -252,8 +255,8 @@ export default function Home() {
                       message.role === "user"
                         ? "bg-secondary text-secondary-foreground"
                         : message.hasError
-                        ? "bg-destructive text-destructive-foreground"
-                        : "bg-primary text-primary-foreground"
+                          ? "bg-destructive text-destructive-foreground"
+                          : "bg-primary text-primary-foreground"
                     }
                   >
                     {message.role === "user" ? (
@@ -265,40 +268,19 @@ export default function Home() {
                 </Avatar>
 
                 <div
-                  className={`flex flex-col max-w-[80%] ${
-                    message.role === "user" ? "items-end" : "items-start"
-                  }`}
+                  className={`flex flex-col max-w-[80%] ${message.role === "user" ? "items-end" : "items-start"
+                    }`}
                 >
                   <Card
-                    className={`px-4 py-3 shadow-sm border-0 transition-all duration-200 hover:shadow-md ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : message.hasError
+                    className={`px-4 py-3 shadow-sm border-0 transition-all duration-200 hover:shadow-md ${message.role === "user"
+                      ? "dark:bg-emerald-600 text-primary-foreground dark:hover:bg-primary/90"
+                      : message.hasError
                         ? "bg-destructive/10 text-destructive border border-destructive/20"
                         : "bg-card text-card-foreground hover:bg-card/80"
-                    }`}
+                      }`}
                   >
                     {/* <p className="text-sm leading-relaxed whitespace-pre-wrap text-pretty">{message.content}</p> */}
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ node, ...props }) => (
-                          <p
-                            className="text-sm leading-relaxed whitespace-pre-wrap"
-                            {...props}
-                          />
-                        ),
-                        a: ({ node, ...props }) => (
-                          <a
-                            className="text-blue-600 underline"
-                            target="_blank"
-                            {...props}
-                          />
-                        ),
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                    <MarkdownMessage content={message.content} />
                   </Card>
                   <span className="text-xs text-muted-foreground mt-1 px-1">
                     {formatTime(message.timestamp)}
@@ -364,7 +346,7 @@ export default function Home() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
+          <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4 fixed bottom-0 w-full max-w-4xl mx-auto left-0 right-0">
             <div className="flex gap-3 items-end">
               <div className="flex-1">
                 <Input
@@ -378,7 +360,17 @@ export default function Home() {
                     }
                   }}
                   disabled={isLoading}
-                  className="min-h-[44px] resize-none bg-background border-border focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200"
+                  className="
+    min-h-[44px]
+    resize-none
+    bg-background
+    border-border
+    focus:ring-2
+    focus:ring-ring
+    focus:border-transparent
+    transition-all
+    duration-200
+  "
                 />
               </div>
               <Button
